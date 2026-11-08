@@ -1,0 +1,81 @@
+diff --git a/assets/js/src/App.js b/assets/js/src/App.js
+index ebc9698..a9d1fa3 100644
+--- a/assets/js/src/App.js
++++ b/assets/js/src/App.js
+@@ -114,7 +114,9 @@ Kanboard.App.prototype.hasId = function(id) {
+ };
+ 
+ Kanboard.App.prototype.showLoadingIcon = function() {
+-    $("body").append('<span id="app-loading-icon">&nbsp;<i class="fa fa-spinner fa-spin"></i></span>');
++    if ($("#app-loading-icon").length === 0) {
++        $("body").append('<span id="app-loading-icon">&nbsp;<i class="fa fa-spinner fa-spin"></i></span>');
++    }
+ };
+ 
+ Kanboard.App.prototype.hideLoadingIcon = function() {
+diff --git a/assets/js/src/BoardPolling.js b/assets/js/src/BoardPolling.js
+index 44ad537..a14d26e 100644
+--- a/assets/js/src/BoardPolling.js
++++ b/assets/js/src/BoardPolling.js
+@@ -1,5 +1,7 @@
+ Kanboard.BoardPolling = function(app) {
+     this.app = app;
++    this.timer = null;
++    this.requestInProgress = false;
+ };
+ 
+ Kanboard.BoardPolling.prototype.execute = function() {
+@@ -7,27 +9,37 @@ Kanboard.BoardPolling.prototype.execute = function() {
+         var interval = parseInt($("#board").attr("data-check-interval"));
+ 
+         if (interval > 0) {
+-            window.setInterval(this.check.bind(this), interval * 1000);
++            // Keep a single timer even if the controller is initialized more than once.
++            if (this.timer === null) {
++                this.timer = window.setInterval(this.check.bind(this), interval * 1000);
++            }
+         }
+     }
+ };
+ 
+ Kanboard.BoardPolling.prototype.check = function() {
+-    if (KB.utils.isVisible() && !this.app.get("BoardDragAndDrop").savingInProgress) {
+-        var self = this;
+-        this.app.showLoadingIcon();
++    if (this.requestInProgress || !KB.utils.isVisible() || this.app.get("BoardDragAndDrop").savingInProgress) {
++        return;
++    }
++
++    var self = this;
++    this.requestInProgress = true;
++    this.app.showLoadingIcon();
+ 
+-        $.ajax({
+-            cache: false,
+-            url: $("#board").data("check-url"),
+-            statusCode: {
+-                200: function(data) {
+-                    self.app.get("BoardDragAndDrop").refresh(data);
+-                },
+-                304: function () {
+-                    self.app.hideLoadingIcon();
+-                }
++    $.ajax({
++        cache: false,
++        url: $("#board").data("check-url"),
++        statusCode: {
++            200: function(data) {
++                self.app.get("BoardDragAndDrop").refresh(data);
++            },
++            304: function () {
++                self.app.hideLoadingIcon();
+             }
+-        });
+-    }
++        },
++        complete: function () {
++            self.requestInProgress = false;
++            self.app.hideLoadingIcon();
++        }
++    });
+ };
